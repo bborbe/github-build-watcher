@@ -31,7 +31,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/bborbe/maintainer/lib/repoallowlist"
+	"github.com/bborbe/maintainer/repoallowlist"
 )
 
 func validateMaxTitleLen(ctx context.Context, maxTitleLen int) error {

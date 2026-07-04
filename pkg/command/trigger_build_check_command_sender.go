@@ -13,7 +13,7 @@ import (
 	"github.com/bborbe/errors"
 	"github.com/golang/glog"
 
-	"github.com/bborbe/maintainer/lib"
+	lib "github.com/bborbe/maintainer"
 )
 
 //counterfeiter:generate -o ../../mocks/trigger_build_check_command_sender.go --fake-name TriggerBuildCheckCommandSender . TriggerBuildCheckCommandSender

@@ -24,7 +24,7 @@ import (
 	libtime "github.com/bborbe/time"
 	"github.com/golang/glog"
 
-	repoallowlist "github.com/bborbe/maintainer/lib/repoallowlist"
+	repoallowlist "github.com/bborbe/maintainer/repoallowlist"
 )
 
 func main() {

@@ -13,7 +13,7 @@ import (
 	"github.com/bborbe/errors"
 	"github.com/golang/glog"
 
-	githubapp "github.com/bborbe/maintainer/lib/githubapp"
+	githubapp "github.com/bborbe/maintainer/githubapp"
 )
 
 // Config is the resolver input.

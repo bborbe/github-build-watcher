@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/bborbe/maintainer/lib"
+	lib "github.com/bborbe/maintainer"
 )
 
 // outcome is the three-state exit-path classifier for the table-driven test.

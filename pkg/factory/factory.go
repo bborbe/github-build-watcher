@@ -27,7 +27,7 @@ import (
 	libtime "github.com/bborbe/time"
 	"github.com/golang/glog"
 
-	lib "github.com/bborbe/maintainer/lib"
+	lib "github.com/bborbe/maintainer"
 )
 
 // CreateKafkaCreateSender constructs a typed create-task command sender backed

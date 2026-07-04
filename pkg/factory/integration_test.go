@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/bborbe/maintainer/lib"
+	lib "github.com/bborbe/maintainer"
 )
 
 var _ = Describe("clean shutdown of three run.Funcs (spec 068 AC 15)", func() {
