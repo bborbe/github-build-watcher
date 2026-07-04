@@ -1,4 +1,4 @@
-# maintainer-watcher-github-build
+# github-build-watcher
 
 Polls the GitHub Actions API for failed CI workflow runs on the default branches of a configured
 repo allowlist and publishes a `CreateTaskCommand` to Kafka on each `green → red` transition so a
@@ -32,7 +32,7 @@ Re-polls of the same broken commit always produce the same task ID (the controll
 so re-deploys and pod restarts are safe. A new red episode on a different commit produces a
 distinct task ID.
 
-See [`docs/build-watcher.md`](../../docs/build-watcher.md) for episode-SHA semantics, derivation
+See [`docs/build-watcher.md`](https://github.com/bborbe/maintainer/blob/master/docs/build-watcher.md) for episode-SHA semantics, derivation
 rules, the worked example (t0–t4), and cold-start flood behaviour.
 
 ## Environment Variables
@@ -89,7 +89,6 @@ The container env vars above are short and pod-scoped. The deploy-side env file 
 ## Development
 
 ```bash
-cd watcher/github-build
 make test          # run unit tests
 make generate      # regenerate counterfeiter mocks
 make precommit     # format + lint + test + security checks
@@ -101,7 +100,6 @@ make precommit     # format + lint + test + security checks
 without standing up the full HTTP server / poll loop:
 
 ```bash
-cd watcher/github-build
 go run ./cmd/run-once \
   --gh-token=$GH_TOKEN \
   --kafka-brokers=localhost:9092 \
@@ -124,8 +122,8 @@ Tasks are emitted with `assignee: build-fixer-agent`. The build-fixer agent (a p
 in `specs/ideas/build-fixer-agent.md`) clones the repo at the episode SHA, classifies the failure
 from the workflow logs, and dispatches a matching dark-factory runbook (e.g. `go-deps-update`).
 
-See [`docs/architecture.md`](../../docs/architecture.md) for the full pipeline.
+See [`docs/architecture.md`](https://github.com/bborbe/maintainer/blob/master/docs/architecture.md) for the full pipeline.
 
 ## License
 
-BSD 2-Clause License. See [LICENSE](../../LICENSE).
+BSD 2-Clause License. See [LICENSE](LICENSE).
