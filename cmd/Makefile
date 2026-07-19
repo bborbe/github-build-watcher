@@ -1,1 +1,1 @@
-include ../../../Makefile.folder
+include ../Makefile.folder
