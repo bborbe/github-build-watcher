@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Go to 1.26.6 and update dependencies
 - Fix GO-2026-6179, GO-2026-6180, CVE-2026-56864, CVE-2026-56865 (golang.org/x/mod transparency log tile verification bypass and hash verification issues)
 - Fix GO-2026-5026, GO-2026-5972, GO-2026-6089, GO-2026-6090, GO-2026-6218 (stdlib vulnerabilities via Go directive bump)
+## v0.1.3
+
+- Update Go to 1.26.6 and update dependencies (golang.org/x/mod to v0.40.0 addressing GO-2026-6179, GO-2026-6180, CVE-2026-56864, CVE-2026-56865; stdlib CVEs addressed via Go 1.26.6)
 
 ## v0.1.2
 
