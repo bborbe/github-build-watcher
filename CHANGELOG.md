@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- chore: Update Go to 1.26.6 and update dependencies
+- fix: Fix GO-2026-6179, GO-2026-6180, CVE-2026-56864, CVE-2026-56865 (golang.org/x/mod transparency log tile verification bypass and hash verification issues)
+- fix: Fix GO-2026-5026, GO-2026-5972, GO-2026-6089, GO-2026-6090, GO-2026-6218 (stdlib vulnerabilities via Go directive bump)
 ## v0.1.3
 
 - Update Go to 1.26.6 and update dependencies (golang.org/x/mod to v0.40.0 addressing GO-2026-6179, GO-2026-6180, CVE-2026-56864, CVE-2026-56865; stdlib CVEs addressed via Go 1.26.6)
