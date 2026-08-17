@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Update Go to 1.26.6 and update dependencies (golang.org/x/mod to v0.40.0 addressing GO-2026-6179, GO-2026-6180, CVE-2026-56864, CVE-2026-56865; stdlib CVEs addressed via Go 1.26.6)
+
 ## v0.1.2
 
 - Update Go dependencies (agent, cqrs, errors, http, kafka, kv, log, maintainer, parse, run, sentry, service, time)
