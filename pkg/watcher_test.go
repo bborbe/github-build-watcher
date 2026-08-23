@@ -51,6 +51,7 @@ var _ = Describe("Watcher", func() {
 			"build-fixer-agent",
 			"todo",
 			"",
+			"dev",
 			ml,
 			pkg.DefaultMaxTitleLen,
 			"",
@@ -82,6 +83,7 @@ var _ = Describe("Watcher", func() {
 				Expect(cmd.Frontmatter["assignee"]).To(Equal("build-fixer-agent"))
 				Expect(cmd.Frontmatter["task_type"]).To(Equal("build-fix"))
 				Expect(cmd.Frontmatter["episode_sha"]).To(Equal("sha-abc"))
+				Expect(cmd.Frontmatter["stage"]).To(Equal("dev"))
 				Expect(cmd.Title).To(Equal("Build Failure github - owner-repo - sha-abc"))
 
 				// verify cursor updated to red
@@ -534,6 +536,7 @@ var _ = Describe("Watcher", func() {
 				assignee,
 				taskStatus,
 				taskPhase,
+				"dev",
 				ml,
 				pkg.DefaultMaxTitleLen,
 				"",
@@ -634,6 +637,7 @@ var _ = Describe("Watcher", func() {
 				"build-fixer-agent",
 				"todo",
 				"",
+				"dev",
 				loader,
 				pkg.DefaultMaxTitleLen,
 				"",
@@ -939,6 +943,7 @@ var _ = Describe("Watcher", func() {
 				"build-fixer-agent",
 				"todo",
 				"",
+				"dev",
 				maintenanceLoaderWithLogs,
 				pkg.DefaultMaxTitleLen,
 				"",
@@ -1325,6 +1330,7 @@ var _ = Describe("Watcher", func() {
 				"build-fixer-agent",
 				"todo",
 				"",
+				"dev",
 				ml,
 				pkg.DefaultMaxTitleLen,
 				"",
