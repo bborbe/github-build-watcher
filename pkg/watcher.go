@@ -91,6 +91,7 @@ func NewWatcher(
 	assignee string,
 	taskStatus string,
 	taskPhase string,
+	stage string,
 	maintenanceLoader maintenance.Loader,
 	maxTitleLen int,
 	taskSuffix string,
@@ -106,6 +107,7 @@ func NewWatcher(
 		assignee:          assignee,
 		taskStatus:        taskStatus,
 		taskPhase:         taskPhase,
+		stage:             stage,
 		maintenanceLoader: maintenanceLoader,
 		maxTitleLen:       maxTitleLen,
 		taskSuffix:        taskSuffix,
@@ -123,6 +125,7 @@ type buildWatcher struct {
 	assignee          string
 	taskStatus        string
 	taskPhase         string
+	stage             string
 	maintenanceLoader maintenance.Loader
 	maxTitleLen       int
 	taskSuffix        string
@@ -436,6 +439,7 @@ func (w *buildWatcher) buildCreateTaskCommand(
 		"repo":        owner + "/" + repo,
 		"episode_sha": episodeSHA,
 		"status":      taskStatus,
+		"stage":       w.stage,
 	}
 	if taskPhase != "" {
 		fm["phase"] = taskPhase
