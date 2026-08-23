@@ -23,8 +23,6 @@ import (
 	"github.com/google/uuid"
 )
 
-//counterfeiter:generate -o ../mocks/watcher.go --fake-name Watcher . Watcher
-
 // DependabotGraphUpdatePrefixes are workflow-name prefixes used by Dependabot for
 // internal graph-maintenance jobs. These are NOT real CI failures — their HTTP 503s
 // are Dependabot's own service being temporarily flaky. The real CI workflows on
@@ -48,6 +46,8 @@ func isDependabotGraphUpdateWorkflow(run WorkflowRun) bool {
 	}
 	return false
 }
+
+//counterfeiter:generate -o ../mocks/watcher.go --fake-name Watcher . Watcher
 
 // Watcher polls GitHub Actions for build status changes.
 //
@@ -618,7 +618,7 @@ var (
 	redactGitHubTokenRE  = regexp.MustCompile(`gh[opsu]_[a-zA-Z0-9]{16,}`)
 	redactBearerAuthRE   = regexp.MustCompile(`Bearer\s+[A-Za-z0-9._-]{16,}`)
 	redactAWSAccessKeyRE = regexp.MustCompile(`AKIA[0-9A-Z]{16}`)
-	// #nosec G101 — this pattern redacts user-provided AWS secret keys from CI logs, it is not a hardcoded credential
+	// #nosec G101 -- this pattern redacts user-provided AWS secret keys from CI logs, it is not a hardcoded credential
 	redactAWSSecretKeyRE = regexp.MustCompile(
 		`(aws_secret_access_key[\s=:]+["']?)[A-Za-z0-9/+]{40}["']?`,
 	)
