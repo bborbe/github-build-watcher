@@ -133,6 +133,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		a.BuildAssignee,
 		a.BuildTaskStatus,
 		a.BuildTaskPhase,
+		a.Stage,
 		a.MaxTitleLen,
 		a.TaskSuffix,
 		currentDateTime, // spec 069: clock for force=true salt nonce
