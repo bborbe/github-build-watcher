@@ -3,7 +3,7 @@ module github.com/bborbe/github-build-watcher
 go 1.26.6
 
 require (
-	github.com/bborbe/agent v0.81.3
+	github.com/bborbe/agent v0.83.0
 	github.com/bborbe/cqrs v0.6.7
 	github.com/bborbe/errors v1.5.18
 	github.com/bborbe/http v1.26.22

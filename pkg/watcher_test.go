@@ -25,6 +25,7 @@ var _ = Describe("Watcher", func() {
 	var ctx context.Context
 	var ghClient *mocks.GitHubClient
 	var createSender *taskmocks.TaskCreateCommandSender
+	var completeSender *taskmocks.TaskCompleteCommandSender
 	var metrics *mocks.Metrics
 	var tmpDir string
 	var cursorPath string
@@ -35,6 +36,7 @@ var _ = Describe("Watcher", func() {
 		cursorPath = filepath.Join(tmpDir, "cursor.json")
 		ghClient = new(mocks.GitHubClient)
 		createSender = new(taskmocks.TaskCreateCommandSender)
+		completeSender = new(taskmocks.TaskCompleteCommandSender)
 		metrics = new(mocks.Metrics)
 	})
 
@@ -44,6 +46,7 @@ var _ = Describe("Watcher", func() {
 		return pkg.NewWatcher(
 			ghClient,
 			createSender,
+			completeSender,
 			metrics,
 			filter.RepoFilters{},
 			pkg.NewStaticSnapshot(allowlist),
@@ -200,28 +203,163 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("red → green", func() {
-			It("clears episode SHA and does not publish", func() {
+			It(
+				"publishes a CompleteCommand with the episode task_id + recovery SHA, then resets state",
+				func() {
+					const episodeSHA = "0123456789abcdef0123456789abcdef01234567"
+					const recoverySHA = "abcdef0123456789abcdef0123456789abcdef01"
+					ghClient.GetDefaultBranchReturns("main", nil)
+					ghClient.GetDefaultBranchHeadSHAReturns(recoverySHA, nil)
+					// first poll: red (episode locks on this SHA)
+					ghClient.GetWorkflowRunsReturnsOnCall(0, []pkg.WorkflowRun{
+						{
+							WorkflowID: 1,
+							Name:       "CI",
+							HeadSHA:    episodeSHA,
+							Conclusion: "failure",
+							CreatedAt:  time.Now(),
+						},
+					}, nil)
+					// second poll: green
+					ghClient.GetWorkflowRunsReturnsOnCall(1, []pkg.WorkflowRun{
+						{
+							WorkflowID: 1,
+							Name:       "CI",
+							HeadSHA:    recoverySHA,
+							Conclusion: "success",
+							CreatedAt:  time.Now(),
+						},
+					}, nil)
+
+					w := makeWatcher([]string{"owner/repo"})
+					Expect(w.Poll(ctx, false)).To(Succeed())
+					Expect(createSender.SendCommandCallCount()).To(Equal(1))
+
+					Expect(w.Poll(ctx, false)).To(Succeed())
+
+					// exactly one closure published, derived from the EPISODE SHA (not recovery)
+					Expect(completeSender.SendCommandCallCount()).To(Equal(1))
+					_, cmd := completeSender.SendCommandArgsForCall(0)
+					Expect(
+						string(cmd.TaskIdentifier),
+					).To(Equal(pkg.DeriveTaskID("owner", "repo", episodeSHA).String()))
+					Expect(cmd.RecoverySHA).To(Equal(recoverySHA))
+
+					// cursor reset to green
+					loaded, err := pkg.LoadCursor(ctx, cursorPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(loaded.Repos["owner/repo"].LastKnownState).To(Equal("green"))
+					Expect(loaded.Repos["owner/repo"].CurrentEpisodeSHA).To(Equal(""))
+				},
+			)
+
+			It("does not publish a closure on the SECOND green poll (green → green)", func() {
 				ghClient.GetDefaultBranchReturns("main", nil)
-				// first poll: red
+				ghClient.GetDefaultBranchHeadSHAReturns(
+					"abcdef0123456789abcdef0123456789abcdef01",
+					nil,
+				)
 				ghClient.GetWorkflowRunsReturnsOnCall(0, []pkg.WorkflowRun{
-					{WorkflowID: 1, HeadSHA: "sha-a", Conclusion: "failure", CreatedAt: time.Now()},
+					{
+						WorkflowID: 1,
+						Name:       "CI",
+						HeadSHA:    "aaaa",
+						Conclusion: "failure",
+						CreatedAt:  time.Now(),
+					},
 				}, nil)
-				// second poll: green
 				ghClient.GetWorkflowRunsReturnsOnCall(1, []pkg.WorkflowRun{
-					{WorkflowID: 1, HeadSHA: "sha-b", Conclusion: "success", CreatedAt: time.Now()},
+					{
+						WorkflowID: 1,
+						Name:       "CI",
+						HeadSHA:    "bbbb",
+						Conclusion: "success",
+						CreatedAt:  time.Now(),
+					},
+				}, nil)
+				ghClient.GetWorkflowRunsReturnsOnCall(2, []pkg.WorkflowRun{
+					{
+						WorkflowID: 1,
+						Name:       "CI",
+						HeadSHA:    "bbbb",
+						Conclusion: "success",
+						CreatedAt:  time.Now(),
+					},
 				}, nil)
 
 				w := makeWatcher([]string{"owner/repo"})
 				Expect(w.Poll(ctx, false)).To(Succeed())
-				Expect(createSender.SendCommandCallCount()).To(Equal(1))
+				Expect(w.Poll(ctx, false)).To(Succeed()) // red → green: one closure
+				Expect(completeSender.SendCommandCallCount()).To(Equal(1))
 
+				Expect(w.Poll(ctx, false)).To(Succeed()) // green → green: no new closure
+				Expect(completeSender.SendCommandCallCount()).To(Equal(1))
+			})
+
+			It(
+				"does not publish a closure when recovery SHA fetch fails (state still advances to green)",
+				func() {
+					ghClient.GetDefaultBranchReturns("main", nil)
+					ghClient.GetDefaultBranchHeadSHAReturns("", stderrors.New("boom"))
+					ghClient.GetWorkflowRunsReturnsOnCall(0, []pkg.WorkflowRun{
+						{
+							WorkflowID: 1,
+							Name:       "CI",
+							HeadSHA:    "aaaa",
+							Conclusion: "failure",
+							CreatedAt:  time.Now(),
+						},
+					}, nil)
+					ghClient.GetWorkflowRunsReturnsOnCall(1, []pkg.WorkflowRun{
+						{
+							WorkflowID: 1,
+							Name:       "CI",
+							HeadSHA:    "bbbb",
+							Conclusion: "success",
+							CreatedAt:  time.Now(),
+						},
+					}, nil)
+
+					w := makeWatcher([]string{"owner/repo"})
+					Expect(w.Poll(ctx, false)).To(Succeed())
+					Expect(w.Poll(ctx, false)).To(Succeed())
+
+					Expect(completeSender.SendCommandCallCount()).To(Equal(0))
+					loaded, err := pkg.LoadCursor(ctx, cursorPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(loaded.Repos["owner/repo"].LastKnownState).To(Equal("green"))
+				},
+			)
+		})
+
+		Context("red → red", func() {
+			It("does not publish a closure (episode locked)", func() {
+				ghClient.GetDefaultBranchReturns("main", nil)
+				ghClient.GetWorkflowRunsReturnsOnCall(0, []pkg.WorkflowRun{
+					{
+						WorkflowID: 1,
+						Name:       "CI",
+						HeadSHA:    "sha-a",
+						Conclusion: "failure",
+						CreatedAt:  time.Now(),
+					},
+				}, nil)
+				ghClient.GetWorkflowRunsReturnsOnCall(1, []pkg.WorkflowRun{
+					{
+						WorkflowID: 1,
+						Name:       "CI",
+						HeadSHA:    "sha-a",
+						Conclusion: "failure",
+						CreatedAt:  time.Now(),
+					},
+				}, nil)
+
+				w := makeWatcher([]string{"owner/repo"})
 				Expect(w.Poll(ctx, false)).To(Succeed())
-				Expect(createSender.SendCommandCallCount()).To(Equal(1)) // no new publish
+				Expect(w.Poll(ctx, false)).To(Succeed())
 
-				loaded, err := pkg.LoadCursor(ctx, cursorPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(loaded.Repos["owner/repo"].LastKnownState).To(Equal("green"))
-				Expect(loaded.Repos["owner/repo"].CurrentEpisodeSHA).To(Equal(""))
+				Expect(completeSender.SendCommandCallCount()).To(Equal(0))
+				Expect(createSender.SendCommandCallCount()).To(Equal(1)) // only the create
 			})
 		})
 
@@ -529,6 +667,7 @@ var _ = Describe("Watcher", func() {
 			return pkg.NewWatcher(
 				ghClient,
 				createSender,
+				completeSender,
 				metrics,
 				filter.RepoFilters{},
 				pkg.NewStaticSnapshot(allowlist),
@@ -630,6 +769,7 @@ var _ = Describe("Watcher", func() {
 			return pkg.NewWatcher(
 				ghClient,
 				createSender,
+				completeSender,
 				metrics,
 				filter.RepoFilters{},
 				pkg.NewStaticSnapshot(allowlist),
@@ -936,6 +1076,7 @@ var _ = Describe("Watcher", func() {
 			return pkg.NewWatcher(
 				ghClient,
 				createSender,
+				completeSender,
 				metrics,
 				filter.RepoFilters{},
 				pkg.NewStaticSnapshot([]string{"owner/repo"}),
@@ -1323,6 +1464,7 @@ var _ = Describe("Watcher", func() {
 			return pkg.NewWatcher(
 				ghClient,
 				createSender,
+				completeSender,
 				metrics,
 				filter.RepoFilters{},
 				pkg.NewStaticSnapshot([]string{repoKey}),

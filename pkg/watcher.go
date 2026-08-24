@@ -84,6 +84,7 @@ func (s *StaticSnapshot) Snapshot() []string { return s.entries }
 func NewWatcher(
 	githubClient GitHubClient,
 	createSender task.CreateCommandSender,
+	completeSender task.CompleteCommandSender,
 	metrics Metrics,
 	repoFilter filter.RepoFilter,
 	allowlist AllowlistSnapshot,
@@ -100,6 +101,7 @@ func NewWatcher(
 	return &buildWatcher{
 		githubClient:      githubClient,
 		createSender:      createSender,
+		completeSender:    completeSender,
 		metrics:           metrics,
 		repoFilter:        repoFilter,
 		allowlist:         allowlist,
@@ -118,6 +120,7 @@ func NewWatcher(
 type buildWatcher struct {
 	githubClient      GitHubClient
 	createSender      task.CreateCommandSender
+	completeSender    task.CompleteCommandSender
 	metrics           Metrics
 	repoFilter        filter.RepoFilter
 	allowlist         AllowlistSnapshot
@@ -251,32 +254,22 @@ func (w *buildWatcher) applyStateMachine(
 
 	switch {
 	case (prevState == "" || prevState == "green") && currState == "red":
-		overrides := w.maintenanceLoader.LoadOverrides(ctx, owner, repo, repoState.DefaultBranch)
-		effectiveAssignee := coalesceString(overrides.Assignee, w.assignee)
-		effectiveStatus := coalesceString(overrides.Status, w.taskStatus)
-		effectivePhase := coalesceString(overrides.Phase, w.taskPhase)
 		taskID := DeriveTaskID(owner, repo, episodeSHA)
-		cmd := w.buildCreateTaskCommand(
+		if w.publishCreateTask(
 			ctx,
-			taskID,
+			repoKey,
 			owner,
 			repo,
+			repoState.DefaultBranch,
 			episodeSHA,
 			failingRuns,
-			effectiveAssignee,
-			effectiveStatus,
-			effectivePhase,
-			overrides.IncludeLogs,
-		)
-		if err := w.createSender.SendCommand(ctx, cmd); err != nil {
-			glog.Errorf("publish create-task failed repo=%s err=%v", repoKey, err)
-			w.metrics.IncPollError("kafka_error")
-			return // do NOT update cursor — next poll retries
+			taskID,
+			false,
+		) {
+			w.metrics.IncStateTransition("green_to_red")
+			repoState.LastKnownState = "red"
+			repoState.CurrentEpisodeSHA = episodeSHA
 		}
-		w.metrics.IncTaskPublished()
-		w.metrics.IncStateTransition("green_to_red")
-		repoState.LastKnownState = "red"
-		repoState.CurrentEpisodeSHA = episodeSHA
 
 	case prevState == "red" && currState == "red" && force:
 		// Spec 069: force=true on a still-red repo re-publishes with a salted
@@ -284,30 +277,19 @@ func (w *buildWatcher) applyStateMachine(
 		// fire and a fresh vault task is created. Cursor state stays "red";
 		// CurrentEpisodeSHA is unchanged (the episode is the same; only the
 		// task identifier is salted to evade dedup).
-		overrides := w.maintenanceLoader.LoadOverrides(ctx, owner, repo, repoState.DefaultBranch)
-		effectiveAssignee := coalesceString(overrides.Assignee, w.assignee)
-		effectiveStatus := coalesceString(overrides.Status, w.taskStatus)
-		effectivePhase := coalesceString(overrides.Phase, w.taskPhase)
 		nonce := strconv.FormatInt(w.currentDateTime.Now().UnixMicro(), 10)
 		taskID := DeriveTaskIDForce(owner, repo, episodeSHA, nonce)
-		cmd := w.buildCreateTaskCommand(
+		w.publishCreateTask(
 			ctx,
-			taskID,
+			repoKey,
 			owner,
 			repo,
+			repoState.DefaultBranch,
 			episodeSHA,
 			failingRuns,
-			effectiveAssignee,
-			effectiveStatus,
-			effectivePhase,
-			overrides.IncludeLogs,
+			taskID,
+			true,
 		)
-		if err := w.createSender.SendCommand(ctx, cmd); err != nil {
-			glog.Errorf("publish create-task (force) failed repo=%s err=%v", repoKey, err)
-			w.metrics.IncPollError("kafka_error")
-			return
-		}
-		w.metrics.IncTaskPublished()
 		// NOTE: IncStateTransition("green_to_red") is NOT incremented on the force
 		// path — the state didn't actually transition (it was already red), so
 		// labeling it as green_to_red would be misleading. Force publishes count
@@ -318,12 +300,107 @@ func (w *buildWatcher) applyStateMachine(
 
 	case prevState == "red" && currState == "green":
 		w.metrics.IncStateTransition("red_to_green")
+		// Publish a CompleteCommand for the episode that just recovered. Capture
+		// the episode SHA from the cursor BEFORE resetting it — the closure's
+		// task_id must derive from the same UUID5(episode SHA) the original
+		// CreateTaskCommand used, or the controller would close a different task.
+		episodeSHA := repoState.CurrentEpisodeSHA
+		w.publishComplete(
+			ctx,
+			owner,
+			repo,
+			repoState.DefaultBranch,
+			episodeSHA,
+		)
 		repoState.LastKnownState = "green"
 		repoState.CurrentEpisodeSHA = ""
 
 	default:
 		// (prevState == "" || prevState == "green") && currState == "green": no transition
 	}
+}
+
+// publishCreateTask publishes a CreateTaskCommand for a build-failure episode.
+// Returns true when the publish succeeded (caller updates cursor state), false
+// when it failed (caller leaves cursor unchanged so the next poll retries).
+// When force is true the command carries the pre-salted taskID (spec 069).
+func (w *buildWatcher) publishCreateTask(
+	ctx context.Context,
+	repoKey, owner, repo, branch, episodeSHA string,
+	failingRuns []WorkflowRun,
+	taskID uuid.UUID,
+	force bool,
+) bool {
+	overrides := w.maintenanceLoader.LoadOverrides(ctx, owner, repo, branch)
+	effectiveAssignee := coalesceString(overrides.Assignee, w.assignee)
+	effectiveStatus := coalesceString(overrides.Status, w.taskStatus)
+	effectivePhase := coalesceString(overrides.Phase, w.taskPhase)
+	cmd := w.buildCreateTaskCommand(
+		ctx,
+		taskID,
+		owner,
+		repo,
+		episodeSHA,
+		failingRuns,
+		effectiveAssignee,
+		effectiveStatus,
+		effectivePhase,
+		overrides.IncludeLogs,
+	)
+	label := "create-task"
+	if force {
+		label = "create-task (force)"
+	}
+	if err := w.createSender.SendCommand(ctx, cmd); err != nil {
+		glog.Errorf("publish %s failed repo=%s err=%v", label, repoKey, err)
+		w.metrics.IncPollError("kafka_error")
+		return false
+	}
+	w.metrics.IncTaskPublished()
+	return true
+}
+
+// publishComplete publishes a CompleteCommand for an episode whose build just
+// recovered (red → green). The task_id is the same deterministic UUID5 over
+// episodeSHA used at task creation, so the controller closes the exact task the
+// watcher created. recovery_sha is the default-branch HEAD at close time.
+//
+// Failure handling (committed spec 076): if the publish fails, the state still
+// advances to green — the next poll sees green → green (no transition) and the
+// closure is NOT retried. A lost closure is acceptable: the /close-obsolete-tasks
+// sweep is the safety net. Errors are logged and counted, never fatal to the poll.
+func (w *buildWatcher) publishComplete(
+	ctx context.Context,
+	owner, repo, branch, episodeSHA string,
+) {
+	if episodeSHA == "" {
+		glog.V(2).Infof("complete-task: no episode SHA for %s/%s, skipping", owner, repo)
+		return
+	}
+	recoverySHA, err := w.githubClient.GetDefaultBranchHeadSHA(ctx, owner, repo, branch)
+	if err != nil {
+		glog.Errorf("complete-task: fetch recovery SHA failed repo=%s/%s err=%v", owner, repo, err)
+		w.metrics.IncPollError("github_error")
+		return
+	}
+	taskID := DeriveTaskID(owner, repo, episodeSHA)
+	cmd := task.CompleteCommand{
+		TaskIdentifier: agentlib.TaskIdentifier(taskID.String()),
+		RecoverySHA:    recoverySHA,
+	}
+	if err := w.completeSender.SendCommand(ctx, cmd); err != nil {
+		glog.Errorf("publish complete-task failed repo=%s/%s err=%v", owner, repo, err)
+		w.metrics.IncPollError("kafka_error")
+		return
+	}
+	w.metrics.IncTaskClosed()
+	glog.V(2).Infof(
+		"complete-task: published repo=%s/%s episode=%s recovery=%s",
+		owner,
+		repo,
+		episodeSHA[:min(len(episodeSHA), 7)],
+		recoverySHA[:min(len(recoverySHA), 7)],
+	)
 }
 
 // deriveState computes the current build state for a repo from its workflow runs.

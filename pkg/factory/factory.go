@@ -41,6 +41,17 @@ func CreateKafkaCreateSender(
 	return task.NewCreateCommandSender(sender, "")
 }
 
+// CreateKafkaCompleteSender constructs a typed complete-task command sender backed
+// by a pre-built Kafka sync producer. The caller owns the producer's
+// lifecycle (created in main.go so it can be reused across senders).
+func CreateKafkaCompleteSender(
+	syncProducer libkafka.SyncProducer,
+	topicPrefix base.TopicPrefix,
+) task.CompleteCommandSender {
+	sender := cdb.NewCommandObjectSender(syncProducer, topicPrefix, log.DefaultSamplerFactory)
+	return task.NewCompleteCommandSender(sender, "")
+}
+
 // CreateSyncProducer constructs a Kafka sync producer for the
 // maintainer-watcher-github-build binary. The returned cleanup closes the
 // producer on shutdown; main.go owns the lifecycle and defers the cleanup
@@ -91,11 +102,13 @@ func CreateWatcher(
 		return nil, nil, nil, errors.Wrap(ctx, err, "create sync producer")
 	}
 	createSender := CreateKafkaCreateSender(syncProducer, topicPrefix)
+	completeSender := CreateKafkaCompleteSender(syncProducer, topicPrefix)
 	maintenanceLoader := maintenance.NewLoader(ghClient)
 	repoFilter := filter.RepoFilters{filter.NewRepoAllowlistFilter(inputAllowlist)}
 	w := pkg.NewWatcher(
 		ghClient,
 		createSender,
+		completeSender,
 		pkg.NewMetrics(),
 		repoFilter,
 		resolved,

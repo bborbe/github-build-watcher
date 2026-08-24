@@ -27,6 +27,22 @@ type GitHubClient struct {
 		result1 string
 		result2 error
 	}
+	GetDefaultBranchHeadSHAStub        func(context.Context, string, string, string) (string, error)
+	getDefaultBranchHeadSHAMutex       sync.RWMutex
+	getDefaultBranchHeadSHAArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+		arg4 string
+	}
+	getDefaultBranchHeadSHAReturns struct {
+		result1 string
+		result2 error
+	}
+	getDefaultBranchHeadSHAReturnsOnCall map[int]struct {
+		result1 string
+		result2 error
+	}
 	GetFileContentStub        func(context.Context, string, string, string, string) ([]byte, error)
 	getFileContentMutex       sync.RWMutex
 	getFileContentArgsForCall []struct {
@@ -171,6 +187,73 @@ func (fake *GitHubClient) GetDefaultBranchReturnsOnCall(i int, result1 string, r
 		})
 	}
 	fake.getDefaultBranchReturnsOnCall[i] = struct {
+		result1 string
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHA(arg1 context.Context, arg2 string, arg3 string, arg4 string) (string, error) {
+	fake.getDefaultBranchHeadSHAMutex.Lock()
+	ret, specificReturn := fake.getDefaultBranchHeadSHAReturnsOnCall[len(fake.getDefaultBranchHeadSHAArgsForCall)]
+	fake.getDefaultBranchHeadSHAArgsForCall = append(fake.getDefaultBranchHeadSHAArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+		arg4 string
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.GetDefaultBranchHeadSHAStub
+	fakeReturns := fake.getDefaultBranchHeadSHAReturns
+	fake.recordInvocation("GetDefaultBranchHeadSHA", []interface{}{arg1, arg2, arg3, arg4})
+	fake.getDefaultBranchHeadSHAMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHACallCount() int {
+	fake.getDefaultBranchHeadSHAMutex.RLock()
+	defer fake.getDefaultBranchHeadSHAMutex.RUnlock()
+	return len(fake.getDefaultBranchHeadSHAArgsForCall)
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHACalls(stub func(context.Context, string, string, string) (string, error)) {
+	fake.getDefaultBranchHeadSHAMutex.Lock()
+	defer fake.getDefaultBranchHeadSHAMutex.Unlock()
+	fake.GetDefaultBranchHeadSHAStub = stub
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHAArgsForCall(i int) (context.Context, string, string, string) {
+	fake.getDefaultBranchHeadSHAMutex.RLock()
+	defer fake.getDefaultBranchHeadSHAMutex.RUnlock()
+	argsForCall := fake.getDefaultBranchHeadSHAArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHAReturns(result1 string, result2 error) {
+	fake.getDefaultBranchHeadSHAMutex.Lock()
+	defer fake.getDefaultBranchHeadSHAMutex.Unlock()
+	fake.GetDefaultBranchHeadSHAStub = nil
+	fake.getDefaultBranchHeadSHAReturns = struct {
+		result1 string
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *GitHubClient) GetDefaultBranchHeadSHAReturnsOnCall(i int, result1 string, result2 error) {
+	fake.getDefaultBranchHeadSHAMutex.Lock()
+	defer fake.getDefaultBranchHeadSHAMutex.Unlock()
+	fake.GetDefaultBranchHeadSHAStub = nil
+	if fake.getDefaultBranchHeadSHAReturnsOnCall == nil {
+		fake.getDefaultBranchHeadSHAReturnsOnCall = make(map[int]struct {
+			result1 string
+			result2 error
+		})
+	}
+	fake.getDefaultBranchHeadSHAReturnsOnCall[i] = struct {
 		result1 string
 		result2 error
 	}{result1, result2}
