@@ -136,6 +136,8 @@ type buildWatcher struct {
 }
 
 func (w *buildWatcher) Poll(ctx context.Context, force bool) error {
+	defer w.metrics.SetRateLimitRemaining(w.githubClient.RateLimitRemaining())
+
 	cursor, err := LoadCursor(ctx, w.cursorPath)
 	if err != nil {
 		return errors.Wrapf(ctx, err, "load cursor")

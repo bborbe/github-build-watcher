@@ -27,6 +27,10 @@ type Metrics interface {
 	IncPollError(reason string)
 	// SetCurrentRedRepos sets the gauge to the current number of repos in red state.
 	SetCurrentRedRepos(count float64)
+	// SetRateLimitRemaining records the primary rate-limit window's remaining
+	// for the shared GitHub App installation token, as read from the last
+	// core-bucket API response's X-RateLimit-Remaining header.
+	SetRateLimitRemaining(remaining int)
 }
 
 var (
@@ -64,6 +68,11 @@ var (
 		Name: "github_build_watcher_current_red_repos",
 		Help: "Current number of repositories in red (failing build) state.",
 	})
+
+	buildRateLimitRemaining = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "github_build_watcher_rate_limit_remaining",
+		Help: "Remaining requests in the shared GitHub App installation token's primary rate-limit window (core bucket), as read from the last API response's X-RateLimit-Remaining header.",
+	})
 )
 
 func init() {
@@ -75,6 +84,7 @@ func init() {
 		buildTasksClosedTotal,
 		buildPollErrorsTotal,
 		buildCurrentRedRepos,
+		buildRateLimitRemaining,
 	)
 	for _, result := range []string{"success", "error"} {
 		buildPollCyclesTotal.WithLabelValues(result).Add(0)
@@ -120,4 +130,8 @@ func (m *buildPrometheusMetrics) IncPollError(reason string) {
 
 func (m *buildPrometheusMetrics) SetCurrentRedRepos(count float64) {
 	buildCurrentRedRepos.Set(count)
+}
+
+func (m *buildPrometheusMetrics) SetRateLimitRemaining(remaining int) {
+	buildRateLimitRemaining.Set(float64(remaining))
 }
