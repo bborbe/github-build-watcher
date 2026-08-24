@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- chore: update Go to 1.27.0 and dependencies (github.com/bborbe/{argument/v2,cqrs,errors,http,k8s,kafka,kv,log,maintainer,math,parse,run,sentry,service,strimzi,time,validation,vault-cli}, github.com/IBM/sarama to v1.60.2, github.com/go-openapi/swag to v0.29.1, k8s.io/{api,apiextensions-apiserver,apimachinery,client-go} to v0.36.4)
+
 ## v0.2.0
 
 - feat: publish `CompleteCommand` on red→green transition — closes the open build-failure vault task as completed (episode-derived task_id + recovery SHA) when the build recovers (spec 076)
