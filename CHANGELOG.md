@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.3.0
 
 - feat: `github_build_watcher_rate_limit_remaining` gauge — exposes the shared GitHub App installation token's core-bucket remaining (captured at the transport layer, scoped to `X-RateLimit-Resource: core`), closing the monitoring blind spot for this shared-token consumer (pr/release watchers already exposed theirs)
 
