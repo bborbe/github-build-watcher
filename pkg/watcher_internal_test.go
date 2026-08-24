@@ -7,6 +7,8 @@ package pkg
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"time"
 
@@ -291,5 +293,85 @@ var _ = Describe("lastNLinesUpTo4KB", func() {
 
 	It("handles empty input", func() {
 		Expect(lastNLinesUpTo4KB("", 30)).To(Equal(""))
+	})
+})
+
+var _ = Describe("rateCapturingTransport", func() {
+	It("captures X-RateLimit-Remaining for the core bucket", func() {
+		var captured = -1
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-RateLimit-Resource", "core")
+			w.Header().Set("X-RateLimit-Remaining", "7342")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		tr := &rateCapturingTransport{
+			inner: srv.Client().Transport,
+			set:   func(n int) { captured = n },
+		}
+		req, err := http.NewRequest("GET", srv.URL, nil)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = tr.RoundTrip(req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(captured).To(Equal(7342))
+	})
+
+	It("ignores responses from a non-core bucket (e.g. search)", func() {
+		var captured = -1
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-RateLimit-Resource", "search")
+			w.Header().Set("X-RateLimit-Remaining", "29")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		tr := &rateCapturingTransport{
+			inner: srv.Client().Transport,
+			set:   func(n int) { captured = n },
+		}
+		req, err := http.NewRequest("GET", srv.URL, nil)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = tr.RoundTrip(req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(captured).To(Equal(-1))
+	})
+
+	It("captures when the resource header is absent (defensive)", func() {
+		var captured = -1
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-RateLimit-Remaining", "12000")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		tr := &rateCapturingTransport{
+			inner: srv.Client().Transport,
+			set:   func(n int) { captured = n },
+		}
+		req, err := http.NewRequest("GET", srv.URL, nil)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = tr.RoundTrip(req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(captured).To(Equal(12000))
+	})
+
+	It("leaves the gauge unchanged when the response has no remaining header", func() {
+		var captured = 42
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-RateLimit-Resource", "core")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		tr := &rateCapturingTransport{
+			inner: srv.Client().Transport,
+			set:   func(n int) { captured = n },
+		}
+		req, err := http.NewRequest("GET", srv.URL, nil)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = tr.RoundTrip(req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(captured).To(Equal(42))
 	})
 })

@@ -9,6 +9,8 @@ import (
 	stderrors "errors"
 	"io"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/bborbe/errors"
@@ -84,17 +86,91 @@ type GitHubClient interface {
 	// Returns (nil, err) for any other API error (network, 401/403, 404).
 	// Returns ([]string{}, nil) when the owner has zero eligible repos.
 	ListOwnerRepos(ctx context.Context, owner string) ([]string, error)
+
+	// RateLimitRemaining returns the requests remaining in the current primary
+	// rate-limit window, as reported by the last core-bucket API response's
+	// X-RateLimit-Remaining header. Zero until the first request populates it.
+	// The build watcher shares the GitHub App installation token with the
+	// pr/release watchers, so this reading reflects the shared 12,500/hour
+	// budget — the metric built from this closes the monitoring blind spot for
+	// this consumer.
+	RateLimitRemaining() int
 }
 
 // NewGitHubClient returns a GitHubClient backed by the real GitHub API.
+// The httpClient must already carry authentication (App auth). The client's
+// transport is wrapped to observe the core-bucket X-RateLimit-Remaining on
+// every response, so RateLimitRemaining() reflects the shared App token's
+// live quota.
 func NewGitHubClient(httpClient *http.Client) GitHubClient {
-	return &githubClient{
-		client: gogithub.NewClient(httpClient),
+	c := &githubClient{}
+	inner := httpClient.Transport
+	if inner == nil {
+		inner = http.DefaultTransport
 	}
+	httpClient.Transport = &rateCapturingTransport{
+		inner: inner,
+		set:   c.setRateRemaining,
+	}
+	c.client = gogithub.NewClient(httpClient)
+	return c
 }
 
 type githubClient struct {
-	client *gogithub.Client
+	client        *gogithub.Client
+	mu            sync.Mutex
+	rateRemaining int
+}
+
+func (c *githubClient) setRateRemaining(n int) {
+	c.mu.Lock()
+	c.rateRemaining = n
+	c.mu.Unlock()
+}
+
+func (c *githubClient) RateLimitRemaining() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rateRemaining
+}
+
+// rateCapturingTransport wraps an http.RoundTripper and records the primary
+// rate-limit remaining from each response's X-RateLimit-Remaining header.
+// GitHub scopes that header to the bucket named by X-RateLimit-Resource:
+// "core" is the shared 12,500/hour token budget, but Search API responses
+// report their own 30/min "search" bucket. Only the "core" bucket is
+// captured; responses without the header (non-GitHub or legacy) are captured
+// defensively. Same transport as github-pr-watcher (the fix there: scoping to
+// core so a search response can't overwrite the gauge with a low number).
+type rateCapturingTransport struct {
+	inner http.RoundTripper
+	set   func(int)
+}
+
+func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.inner.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	t.captureRemaining(resp)
+	return resp, err
+}
+
+// captureRemaining records the response's remaining quota when it belongs to
+// the core rate-limit bucket.
+func (t *rateCapturingTransport) captureRemaining(resp *http.Response) {
+	if resource := resp.Header.Get("X-RateLimit-Resource"); resource != "" && resource != "core" {
+		return
+	}
+	v := resp.Header.Get("X-RateLimit-Remaining")
+	if v == "" {
+		return
+	}
+	n, parseErr := strconv.Atoi(v)
+	if parseErr != nil {
+		return
+	}
+	t.set(n)
 }
 
 func (c *githubClient) GetWorkflowRuns(
