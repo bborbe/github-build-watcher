@@ -31,8 +31,8 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/bborbe/argument/v2 v2.12.37 // indirect
 	github.com/bborbe/collection v1.20.23 // indirect
-	github.com/bborbe/k8s v1.14.11 // indirect
-	github.com/bborbe/math v1.4.4 // indirect
+	github.com/bborbe/k8s v1.14.12 // indirect
+	github.com/bborbe/math v1.4.5 // indirect
 	github.com/bborbe/strimzi v1.8.15 // indirect
 	github.com/bborbe/validation v1.4.22 // indirect
 	github.com/bborbe/vault-cli v0.115.0 // indirect
