@@ -54,6 +54,10 @@ type GitHubClient interface {
 	// GetDefaultBranch returns the default branch name for a repository.
 	GetDefaultBranch(ctx context.Context, owner, repo string) (string, error)
 
+	// GetDefaultBranchHeadSHA returns the 40-char hex SHA of the branch tip.
+	// Used as recovery_sha on a red→green transition (default-branch HEAD at close time).
+	GetDefaultBranchHeadSHA(ctx context.Context, owner, repo, branch string) (string, error)
+
 	// GetFileContent fetches the raw content of a file at the given ref.
 	// Returns (nil, nil) if the file does not exist (HTTP 404 — the common case).
 	// Returns (nil, ErrRateLimited) when rate-limited.
@@ -162,6 +166,25 @@ func (c *githubClient) GetDefaultBranch(
 		return "", errors.Wrapf(ctx, err, "get repository %s/%s", owner, repo)
 	}
 	return repository.GetDefaultBranch(), nil
+}
+
+func (c *githubClient) GetDefaultBranchHeadSHA(
+	ctx context.Context,
+	owner, repo, branch string,
+) (string, error) {
+	branchInfo, _, err := c.client.Repositories.GetBranch(ctx, owner, repo, branch, 1)
+	if err != nil {
+		var rl *gogithub.RateLimitError
+		var arl *gogithub.AbuseRateLimitError
+		if stderrors.As(err, &rl) || stderrors.As(err, &arl) {
+			return "", ErrRateLimited
+		}
+		return "", errors.Wrapf(ctx, err, "get branch %s/%s@%s", owner, repo, branch)
+	}
+	if branchInfo.GetCommit() == nil {
+		return "", errors.Wrapf(ctx, err, "branch %s/%s@%s has no commit", owner, repo, branch)
+	}
+	return branchInfo.GetCommit().GetSHA(), nil
 }
 
 func (c *githubClient) GetFileContent(

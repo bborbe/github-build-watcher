@@ -20,6 +20,8 @@ type Metrics interface {
 	IncStateTransition(transition string)
 	// IncTaskPublished increments the published-task counter.
 	IncTaskPublished()
+	// IncTaskClosed increments the published-closure counter.
+	IncTaskClosed()
 	// IncPollError increments the poll-error counter.
 	// reason: "rate_limited" | "github_error" | "kafka_error"
 	IncPollError(reason string)
@@ -48,6 +50,11 @@ var (
 		Help: "Total number of CreateTaskCommands published to Kafka.",
 	})
 
+	buildTasksClosedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "github_build_watcher_tasks_closed_total",
+		Help: "Total number of CompleteCommands published to Kafka (red→green closures).",
+	})
+
 	buildPollErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "github_build_watcher_poll_errors_total",
 		Help: "Total number of poll errors by reason.",
@@ -65,6 +72,7 @@ func init() {
 		buildReposCheckedTotal,
 		buildStateTransitionsTotal,
 		buildTasksPublishedTotal,
+		buildTasksClosedTotal,
 		buildPollErrorsTotal,
 		buildCurrentRedRepos,
 	)
@@ -100,6 +108,10 @@ func (m *buildPrometheusMetrics) IncStateTransition(transition string) {
 
 func (m *buildPrometheusMetrics) IncTaskPublished() {
 	buildTasksPublishedTotal.Inc()
+}
+
+func (m *buildPrometheusMetrics) IncTaskClosed() {
+	buildTasksClosedTotal.Inc()
 }
 
 func (m *buildPrometheusMetrics) IncPollError(reason string) {

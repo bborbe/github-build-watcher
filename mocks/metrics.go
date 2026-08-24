@@ -30,6 +30,10 @@ type Metrics struct {
 	incStateTransitionArgsForCall []struct {
 		arg1 string
 	}
+	IncTaskClosedStub        func()
+	incTaskClosedMutex       sync.RWMutex
+	incTaskClosedArgsForCall []struct {
+	}
 	IncTaskPublishedStub        func()
 	incTaskPublishedMutex       sync.RWMutex
 	incTaskPublishedArgsForCall []struct {
@@ -161,6 +165,30 @@ func (fake *Metrics) IncStateTransitionArgsForCall(i int) string {
 	defer fake.incStateTransitionMutex.RUnlock()
 	argsForCall := fake.incStateTransitionArgsForCall[i]
 	return argsForCall.arg1
+}
+
+func (fake *Metrics) IncTaskClosed() {
+	fake.incTaskClosedMutex.Lock()
+	fake.incTaskClosedArgsForCall = append(fake.incTaskClosedArgsForCall, struct {
+	}{})
+	stub := fake.IncTaskClosedStub
+	fake.recordInvocation("IncTaskClosed", []interface{}{})
+	fake.incTaskClosedMutex.Unlock()
+	if stub != nil {
+		fake.IncTaskClosedStub()
+	}
+}
+
+func (fake *Metrics) IncTaskClosedCallCount() int {
+	fake.incTaskClosedMutex.RLock()
+	defer fake.incTaskClosedMutex.RUnlock()
+	return len(fake.incTaskClosedArgsForCall)
+}
+
+func (fake *Metrics) IncTaskClosedCalls(stub func()) {
+	fake.incTaskClosedMutex.Lock()
+	defer fake.incTaskClosedMutex.Unlock()
+	fake.IncTaskClosedStub = stub
 }
 
 func (fake *Metrics) IncTaskPublished() {
