@@ -21,9 +21,10 @@ var _ = Describe("application Run — allowlist Validate boundary", func() {
 	Context("Run with malformed REPO_ALLOWLIST entries", func() {
 		It("fails fast with an aggregate error naming every malformed entry", func() {
 			app := application{
-				PollInterval:  "5m",
-				RepoAllowlist: "github.com/bborbe/maintainer,bad-entry,also/bad",
-				MaxTitleLen:   200,
+				PollInterval:       "5m",
+				WebhookMinInterval: "1m",
+				RepoAllowlist:      "github.com/bborbe/maintainer,bad-entry,also/bad",
+				MaxTitleLen:        200,
 			}
 			err := app.Run(ctx, nil)
 			Expect(err).To(HaveOccurred())
@@ -35,9 +36,10 @@ var _ = Describe("application Run — allowlist Validate boundary", func() {
 	Context("Run with wildcard REPO_ALLOWLIST entry", func() {
 		It("does not reject wildcard entries via Validate", func() {
 			app := application{
-				PollInterval:  "5m",
-				RepoAllowlist: "github.com/bborbe/*",
-				MaxTitleLen:   200,
+				PollInterval:       "5m",
+				WebhookMinInterval: "1m",
+				RepoAllowlist:      "github.com/bborbe/*",
+				MaxTitleLen:        200,
 			}
 			err := app.Run(ctx, nil)
 			// Validate passes for wildcards; error comes from a later step (e.g. Kafka).

@@ -31,6 +31,16 @@ type Metrics interface {
 	// for the shared GitHub App installation token, as read from the last
 	// core-bucket API response's X-RateLimit-Remaining header.
 	SetRateLimitRemaining(remaining int)
+	// IncWebhookDelivery increments the webhook delivery counter with the given result label.
+	// result: "success", "skip"
+	IncWebhookDelivery(result string)
+	// IncWebhookSignatureRejected increments the webhook signature-rejection counter.
+	IncWebhookSignatureRejected()
+	// ObserveWebhookDispatchLatency records the dispatch latency of a webhook delivery.
+	ObserveWebhookDispatchLatency(seconds float64)
+	// IncWebhookSkipped increments the webhook skip counter.
+	// reason: "not_completed" | "not_failure" | "not_default_branch" | "debounced"
+	IncWebhookSkipped(reason string)
 }
 
 var (
@@ -73,6 +83,27 @@ var (
 		Name: "github_build_watcher_rate_limit_remaining",
 		Help: "Remaining requests in the shared GitHub App installation token's primary rate-limit window (core bucket), as read from the last API response's X-RateLimit-Remaining header.",
 	})
+
+	buildWebhookDeliveriesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "github_build_watcher_webhook_deliveries_total",
+		Help: "Total GitHub webhook deliveries by result.",
+	}, []string{"result"})
+
+	buildWebhookSignatureRejectionsTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "github_build_watcher_webhook_signature_rejections_total",
+		Help: "Total GitHub webhook payloads rejected for an invalid HMAC signature.",
+	})
+
+	buildWebhookDispatchLatencySeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "github_build_watcher_webhook_dispatch_latency_seconds",
+		Help:    "Latency of dispatching a GitHub webhook delivery to Kafka.",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	buildWebhookSkippedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "github_build_watcher_webhook_skipped_total",
+		Help: "Total GitHub webhook workflow_run deliveries skipped by reason.",
+	}, []string{"reason"})
 )
 
 func init() {
@@ -85,6 +116,10 @@ func init() {
 		buildPollErrorsTotal,
 		buildCurrentRedRepos,
 		buildRateLimitRemaining,
+		buildWebhookDeliveriesTotal,
+		buildWebhookSignatureRejectionsTotal,
+		buildWebhookDispatchLatencySeconds,
+		buildWebhookSkippedTotal,
 	)
 	for _, result := range []string{"success", "error"} {
 		buildPollCyclesTotal.WithLabelValues(result).Add(0)
@@ -94,6 +129,12 @@ func init() {
 	}
 	for _, reason := range []string{"rate_limited", "github_error", "kafka_error"} {
 		buildPollErrorsTotal.WithLabelValues(reason).Add(0)
+	}
+	for _, result := range []string{"success", "skip"} {
+		buildWebhookDeliveriesTotal.WithLabelValues(result).Add(0)
+	}
+	for _, reason := range []string{"not_completed", "not_failure", "not_default_branch", "debounced"} {
+		buildWebhookSkippedTotal.WithLabelValues(reason).Add(0)
 	}
 }
 
@@ -134,4 +175,20 @@ func (m *buildPrometheusMetrics) SetCurrentRedRepos(count float64) {
 
 func (m *buildPrometheusMetrics) SetRateLimitRemaining(remaining int) {
 	buildRateLimitRemaining.Set(float64(remaining))
+}
+
+func (m *buildPrometheusMetrics) IncWebhookDelivery(result string) {
+	buildWebhookDeliveriesTotal.WithLabelValues(result).Inc()
+}
+
+func (m *buildPrometheusMetrics) IncWebhookSignatureRejected() {
+	buildWebhookSignatureRejectionsTotal.Inc()
+}
+
+func (m *buildPrometheusMetrics) ObserveWebhookDispatchLatency(seconds float64) {
+	buildWebhookDispatchLatencySeconds.Observe(seconds)
+}
+
+func (m *buildPrometheusMetrics) IncWebhookSkipped(reason string) {
+	buildWebhookSkippedTotal.WithLabelValues(reason).Inc()
 }

@@ -8,6 +8,7 @@ package factory
 import (
 	"context"
 	"strings"
+	"time"
 
 	task "github.com/bborbe/agent/command/task"
 	"github.com/bborbe/cqrs/base"
@@ -153,6 +154,27 @@ func CreateTriggerBuildCheckHandler(
 	sender command.TriggerBuildCheckCommandSender,
 ) handler.TriggerBuildCheckHandler {
 	return handler.NewTriggerBuildCheckHandler(sender)
+}
+
+// CreateWebhookHandler wires the thin webhook receiver that publishes a
+// TriggerBuildCheckCommand to Kafka for each signature-verified workflow_run
+// delivery on /webhook/github-build that completed with conclusion=failure on
+// the repository's default branch and passes the per-repo debounce.
+// Filter/trust work stays in the in-pod command consumer (shared with /trigger).
+func CreateWebhookHandler(
+	sender command.TriggerBuildCheckCommandSender,
+	secret string,
+	metrics handler.WebhookMetrics,
+	clock libtime.CurrentDateTimeGetter,
+	minInterval time.Duration,
+) handler.WebhookHandler {
+	return handler.NewWebhookHandler(
+		sender,
+		secret,
+		metrics,
+		clock,
+		pkg.NewDebouncer(minInterval, clock),
+	)
 }
 
 // CreateCommandConsumer wires a run.Func that consumes TriggerBuildCheckCommand

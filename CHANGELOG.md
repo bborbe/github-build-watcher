@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- feat: GitHub webhook receiver for instant build-check trigger — `/webhook/github-build` verifies the HMAC signature and dispatches a `TriggerBuildCheckCommand` (scoped to the event's repo) on `workflow_run` events that completed with conclusion=failure on the repository's default branch. Polling stays as backfill. New counters: `webhook_deliveries_total`, `webhook_signature_rejections_total`, `webhook_dispatch_latency_seconds`, `webhook_skipped_total`.
+
 ## v0.3.1
 
 - chore: update github.com/bborbe/agent to v0.83.1, github.com/bborbe/errors to v1.5.21, github.com/bborbe/log to v1.6.25, github.com/bborbe/maintainer to v0.50.3

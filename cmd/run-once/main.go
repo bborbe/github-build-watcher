@@ -149,5 +149,5 @@ func (a *Application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 	defer cleanup()
 
-	return w.Poll(ctx, false)
+	return w.Poll(ctx, false, "")
 }

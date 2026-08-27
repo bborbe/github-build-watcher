@@ -72,7 +72,11 @@ type application struct {
 	// purposes. Empty means unprefixed topics.
 	TopicPrefix base.TopicPrefix `required:"false" arg:"topic-prefix" env:"TOPIC_PREFIX" usage:"Kafka topic prefix for CQRS topic construction"`
 
+	WebhookSecret      string `required:"false" arg:"webhook-secret"       env:"WEBHOOK_SECRET"       usage:"GitHub webhook secret for HMAC verification of /webhook/github-build"                         display:"length"`
+	WebhookMinInterval string `required:"false" arg:"webhook-min-interval" env:"WEBHOOK_MIN_INTERVAL" usage:"Min interval between webhook-triggered build-checks per repo (collapses workflow_run storms)"                  default:"1m"`
+
 	TriggerHandler http.Handler
+	WebhookHandler http.Handler
 }
 
 //nolint:funlen // wires Run from validated config — extracting any chunk hurts readability without reducing complexity. 90+ lines, over the 80-line cap.
@@ -84,6 +88,10 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	pollInterval, err := time.ParseDuration(a.PollInterval)
 	if err != nil {
 		return errors.Wrapf(ctx, err, "parse poll interval %q", a.PollInterval)
+	}
+	webhookMinInterval, err := time.ParseDuration(a.WebhookMinInterval)
+	if err != nil {
+		return errors.Wrapf(ctx, err, "parse webhook min interval %q", a.WebhookMinInterval)
 	}
 
 	repoAllowlist, err := filter.ParseRepoAllowlist(a.RepoAllowlist)
@@ -152,6 +160,19 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	triggerHandler := factory.CreateTriggerBuildCheckHandler(triggerBuildCheckSender)
 	a.TriggerHandler = libhttp.NewJSONErrorHandler(triggerHandler)
 
+	// Webhook receiver reuses the same sender: every signature-verified
+	// workflow_run delivery publishes a TriggerBuildCheckCommand, so the in-pod
+	// consumer (poll → state machine → CreateTaskCommand) applies unchanged.
+	webhookMetrics := pkg.NewMetrics()
+	webhookHandler := factory.CreateWebhookHandler(
+		triggerBuildCheckSender,
+		a.WebhookSecret,
+		webhookMetrics,
+		libtime.NewCurrentDateTime(),
+		webhookMinInterval,
+	)
+	a.WebhookHandler = libhttp.NewJSONErrorHandler(webhookHandler)
+
 	// In-pod command consumer: third run.Func alongside poll + HTTP.
 	// session-scoped offset store — replays the request topic from OffsetOldest
 	// on pod restart; safe because the downstream Watcher.Poll is idempotent
@@ -186,7 +207,9 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 func (a *application) pollOnce(w pkg.Watcher) run.Func {
 	return func(ctx context.Context) error {
 		glog.V(2).Infof("poll cycle start stage=%s", a.Stage)
-		return w.Poll(ctx, false)
+		// scope="" = full fleet scan. Webhook-triggered scoped polls arrive
+		// via the command consumer, not this loop.
+		return w.Poll(ctx, false, "")
 	}
 }
 
@@ -226,6 +249,7 @@ func (a *application) createHTTPServer() run.Func {
 		router.Path("/resetcursor/{repo:.+}").
 			Handler(libhttp.NewDangerousHandlerWrapper(pkg.NewResetCursorHandler(pkg.DefaultCursorPath)))
 		router.Path("/trigger").Handler(a.TriggerHandler)
+		router.Path("/webhook/github-build").Handler(a.WebhookHandler)
 		glog.V(2).Infof("http server listening on %s", a.Listen)
 		return libhttp.NewServer(a.Listen, router).Run(ctx)
 	}

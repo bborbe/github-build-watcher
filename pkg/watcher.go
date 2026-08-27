@@ -55,8 +55,12 @@ func isDependabotGraphUpdateWorkflow(run WorkflowRun) bool {
 // publishes a salted CreateTaskCommand instead of skipping (spec 069), so
 // operators can force a re-publish for a still-red build via the /trigger
 // HTTP path. The poll-interval loop always passes false.
+//
+// When scope is non-empty ("owner/repo"), only that single repo is scanned —
+// the webhook path — so one workflow_run delivery costs ~3 API calls, not a
+// full fleet scan. Empty scope runs the full allowlist.
 type Watcher interface {
-	Poll(ctx context.Context, force bool) error
+	Poll(ctx context.Context, force bool, scope string) error
 }
 
 // AllowlistSnapshot returns the current set of concrete "host/owner/repo"
@@ -135,7 +139,7 @@ type buildWatcher struct {
 	currentDateTime   libtime.CurrentDateTimeGetter
 }
 
-func (w *buildWatcher) Poll(ctx context.Context, force bool) error {
+func (w *buildWatcher) Poll(ctx context.Context, force bool, scope string) error {
 	defer w.metrics.SetRateLimitRemaining(w.githubClient.RateLimitRemaining())
 
 	cursor, err := LoadCursor(ctx, w.cursorPath)
@@ -143,8 +147,8 @@ func (w *buildWatcher) Poll(ctx context.Context, force bool) error {
 		return errors.Wrapf(ctx, err, "load cursor")
 	}
 
-	snapshot := w.allowlist.Snapshot()
-	for _, repoKey := range snapshot {
+	repoKeys := w.resolveRepoKeys(scope)
+	for _, repoKey := range repoKeys {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -174,6 +178,31 @@ func (w *buildWatcher) Poll(ctx context.Context, force bool) error {
 	}
 
 	w.metrics.IncPollCycle("success")
+	return nil
+}
+
+// resolveRepoKeys returns the repo keys to scan this cycle: the full allowlist
+// snapshot for an empty scope, or the single repo named by a non-empty scope
+// ("owner/repo" — the webhook path). Returns nil when the scope names no
+// allowlisted repo (defensive — the webhook only delivers for installed repos,
+// and a stale delivery for a de-installed repo is a safe no-op).
+func (w *buildWatcher) resolveRepoKeys(scope string) []string {
+	snapshot := w.allowlist.Snapshot()
+	if scope == "" {
+		return snapshot
+	}
+	scopeOwner, scopeRepo := splitRepoKey(scope)
+	if scopeRepo == "" {
+		glog.V(2).Infof("poll cycle scope=%q outside allowlist — no-op", scope)
+		return nil
+	}
+	for _, key := range snapshot {
+		owner, repo := splitRepoKey(key)
+		if owner == scopeOwner && repo == scopeRepo {
+			return []string{key}
+		}
+	}
+	glog.V(2).Infof("poll cycle scope=%q not in allowlist — no-op", scope)
 	return nil
 }
 

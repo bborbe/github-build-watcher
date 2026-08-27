@@ -31,8 +31,10 @@ import (
 // already owns IncPollCycle / IncPublished / IncReposScanned / IncFilterSkipped.
 // The executor reads cmd.Force and forwards it to Watcher.Poll (spec 069):
 // when true, the red×red episode-lock arm of the state machine publishes a
-// salted CreateTaskCommand instead of skipping. The cmd.Scope field is still
-// reserved-unread (spec Non-goal: per-repo filter UX is a separate spec).
+// salted CreateTaskCommand instead of skipping. cmd.Scope is forwarded to
+// Watcher.Poll: a webhook-triggered command carries "owner/repo" and narrows
+// the poll to that single repo (scoped poll, mirroring github-release-watcher),
+// so one workflow_run delivery costs ~3 API calls, not a full fleet scan.
 func NewTriggerBuildCheckCommandExecutor(
 	watcher pkg.Watcher,
 ) cdb.CommandObjectExecutorTx {
@@ -66,7 +68,7 @@ func runTriggerBuildCheck(
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := watcher.Poll(ctx, cmd.Force); err != nil {
+	if err := watcher.Poll(ctx, cmd.Force, cmd.Scope); err != nil {
 		// Transient: rate-limited, GitHub 5xx, cursor read error, etc.
 		// Framework emits Failure on the result topic, Kafka redelivers.
 		// The Watcher already logged per-cycle state; we just propagate.
