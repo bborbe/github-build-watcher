@@ -1,6 +1,6 @@
 module github.com/bborbe/github-build-watcher
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/bborbe/agent v0.86.0
