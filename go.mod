@@ -33,7 +33,7 @@ require (
 	github.com/bborbe/argument/v2 v2.13.6 // indirect
 	github.com/bborbe/collection v1.21.1 // indirect
 	github.com/bborbe/k8s v1.14.21 // indirect
-	github.com/bborbe/math v1.4.13 // indirect
+	github.com/bborbe/math v1.4.14 // indirect
 	github.com/bborbe/strimzi v1.8.20 // indirect
 	github.com/bborbe/validation v1.5.3 // indirect
 	github.com/bborbe/vault-cli v0.168.4 // indirect
