@@ -3,10 +3,10 @@ module github.com/bborbe/github-build-watcher
 go 1.27.2
 
 require (
-	github.com/bborbe/agent v0.100.0
+	github.com/bborbe/agent v0.101.0
 	github.com/bborbe/cqrs v0.6.12
 	github.com/bborbe/errors v1.6.3
-	github.com/bborbe/http v1.26.29
+	github.com/bborbe/http v1.26.30
 	github.com/bborbe/kafka v1.27.1
 	github.com/bborbe/kv v1.21.18
 	github.com/bborbe/log v1.7.4
@@ -36,7 +36,7 @@ require (
 	github.com/bborbe/math v1.4.14 // indirect
 	github.com/bborbe/strimzi v1.8.20 // indirect
 	github.com/bborbe/validation v1.5.4 // indirect
-	github.com/bborbe/vault-cli v0.168.6 // indirect
+	github.com/bborbe/vault-cli v0.169.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -58,7 +58,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20261012231050-2af12c3f4d87 // indirect
+	github.com/google/pprof v0.0.0-20261014150452-c3b4e57cab2c // indirect
 	github.com/hashicorp/go-uuid v1.0.4 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
