@@ -11,7 +11,7 @@ require (
 	github.com/bborbe/kv v1.21.18
 	github.com/bborbe/log v1.7.4
 	github.com/bborbe/maintainer v0.50.12
-	github.com/bborbe/parse v1.12.3
+	github.com/bborbe/parse v1.12.4
 	github.com/bborbe/run v1.11.2
 	github.com/bborbe/sentry v1.10.5
 	github.com/bborbe/service v1.11.0
@@ -31,7 +31,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/a2aproject/a2a-go/v2 v2.6.0 // indirect
 	github.com/bborbe/argument/v2 v2.13.6 // indirect
-	github.com/bborbe/collection v1.21.2 // indirect
+	github.com/bborbe/collection v1.21.3 // indirect
 	github.com/bborbe/k8s v1.14.23 // indirect
 	github.com/bborbe/math v1.4.15 // indirect
 	github.com/bborbe/strimzi v1.8.21 // indirect
