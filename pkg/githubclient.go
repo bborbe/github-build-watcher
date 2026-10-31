@@ -101,17 +101,19 @@ type GitHubClient interface {
 // The httpClient must already carry authentication (App auth). The client's
 // transport is wrapped to observe the core-bucket X-RateLimit-Remaining on
 // every response, so RateLimitRemaining() reflects the shared App token's
-// live quota.
-func NewGitHubClient(httpClient *http.Client) GitHubClient {
+// live quota. Every round trip is also counted by recorder (per-caller
+// github_api_calls_total / github_api_rate_limited_total).
+func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHubClient {
 	c := &githubClient{}
 	inner := httpClient.Transport
 	if inner == nil {
 		inner = http.DefaultTransport
 	}
 	httpClient.Transport = &rateCapturingTransport{
-		inner: inner,
-		set:   c.setRateRemaining,
-		log:   logNon2xxV2,
+		inner:    inner,
+		set:      c.setRateRemaining,
+		log:      logNon2xxV2,
+		recorder: recorder,
 	}
 	c.client = gogithub.NewClient(httpClient)
 	return c
@@ -149,14 +151,21 @@ func (c *githubClient) RateLimitRemaining() int {
 // whether a 429/403 is primary-quota exhaustion or secondary rate limiting.
 // go-github does not log at its HTTP boundary, so without this line that
 // evidence is lost. A nil log disables it.
+//
+// It also counts every round trip via recorder, transport errors included.
+// A nil recorder disables counting.
 type rateCapturingTransport struct {
-	inner http.RoundTripper
-	set   func(int)
-	log   func(string)
+	inner    http.RoundTripper
+	set      func(int)
+	log      func(string)
+	recorder GitHubAPIRecorder
 }
 
 func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.inner.RoundTrip(req)
+	if t.recorder != nil {
+		t.recorder.Record(req, resp, err)
+	}
 	if err != nil || resp == nil {
 		return resp, err
 	}
