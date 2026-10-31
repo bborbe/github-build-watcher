@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -141,15 +142,28 @@ var _ = Describe("rateCapturingTransport per-caller counters", func() {
 		labels = freshLabels()
 	})
 
+	// Gathers from the registry without calling WithLabelValues, which would
+	// create the series on read and make the assertion vacuous.
 	It("pre-initialises every bucket x outcome and bucket x class at zero", func() {
 		NewGitHubAPIRecorder(labels)
-		for _, bucket := range githubAPIBuckets {
-			for _, outcome := range githubAPIOutcomes {
-				Expect(calls(labels, bucket, outcome)).To(Equal(0.0))
+
+		families, err := prometheus.DefaultGatherer.Gather()
+		Expect(err).NotTo(HaveOccurred())
+		counts := map[string]int{}
+		for _, mf := range families {
+			for _, m := range mf.GetMetric() {
+				for _, lp := range m.GetLabel() {
+					if lp.GetName() == "service" && lp.GetValue() == labels.Service {
+						Expect(m.GetCounter().GetValue()).To(Equal(0.0))
+						counts[mf.GetName()]++
+					}
+				}
 			}
-			Expect(rateLimited(labels, bucket)).To(Equal(0.0))
 		}
-		Expect(testutil.CollectAndCount(githubAPICallsTotal)).To(BeNumerically(">=", 6))
+		Expect(counts).To(Equal(map[string]int{
+			"github_api_calls_total":        6,
+			"github_api_rate_limited_total": 3,
+		}))
 	})
 
 	// The inverse of the recorded defect: a gauge fed by whichever response
