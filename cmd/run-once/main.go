@@ -111,7 +111,8 @@ func (a *Application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	ghClient := pkg.NewGitHubClient(httpClient)
+	// run-once exposes no /metrics endpoint, so per-caller counting is off.
+	ghClient := pkg.NewGitHubClient(httpClient, nil)
 
 	resolved, refreshTask, err := factory.CreateAllowlistSnapshot(ghClient, repoAllowlist)
 	if err != nil {

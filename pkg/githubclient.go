@@ -101,16 +101,18 @@ type GitHubClient interface {
 // The httpClient must already carry authentication (App auth). The client's
 // transport is wrapped to observe the core-bucket X-RateLimit-Remaining on
 // every response, so RateLimitRemaining() reflects the shared App token's
-// live quota.
-func NewGitHubClient(httpClient *http.Client) GitHubClient {
+// live quota. Every round trip is also counted by recorder (per-caller
+// github_api_calls_total / github_api_rate_limited_total).
+func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHubClient {
 	c := &githubClient{}
 	inner := httpClient.Transport
 	if inner == nil {
 		inner = http.DefaultTransport
 	}
 	httpClient.Transport = &rateCapturingTransport{
-		inner: inner,
-		set:   c.setRateRemaining,
+		inner:    inner,
+		set:      c.setRateRemaining,
+		recorder: recorder,
 	}
 	c.client = gogithub.NewClient(httpClient)
 	return c
@@ -142,13 +144,20 @@ func (c *githubClient) RateLimitRemaining() int {
 // captured; responses without the header (non-GitHub or legacy) are captured
 // defensively. Same transport as github-pr-watcher (the fix there: scoping to
 // core so a search response can't overwrite the gauge with a low number).
+//
+// The same capture point counts every round trip via recorder, transport
+// errors included. A nil recorder disables counting.
 type rateCapturingTransport struct {
-	inner http.RoundTripper
-	set   func(int)
+	inner    http.RoundTripper
+	set      func(int)
+	recorder GitHubAPIRecorder
 }
 
 func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.inner.RoundTrip(req)
+	if t.recorder != nil {
+		t.recorder.Record(req, resp, err)
+	}
 	if err != nil || resp == nil {
 		return resp, err
 	}

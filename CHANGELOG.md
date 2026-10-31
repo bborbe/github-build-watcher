@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- feat: add `github_api_calls_total` and `github_api_rate_limited_total` per-caller counters (labels `service`, `credential`, `bucket`, `outcome`/`class`, `cluster`) with the bucket derived from the request path; new `CLUSTER` env (default `nuke`)
+- chore: bump golang.org/x/net v0.61.0 → v0.62.0 (GO-2026-6860, GO-2026-6866)
+
 ## v0.4.10
 
 - chore: update github.com/bborbe/parse to v1.12.4

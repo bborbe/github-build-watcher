@@ -12,6 +12,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/bborbe/cqrs/base"
@@ -72,6 +73,8 @@ type application struct {
 	// purposes. Empty means unprefixed topics.
 	TopicPrefix base.TopicPrefix `required:"false" arg:"topic-prefix" env:"TOPIC_PREFIX" usage:"Kafka topic prefix for CQRS topic construction"`
 
+	Cluster string `required:"false" arg:"cluster" env:"CLUSTER" usage:"Cluster name stamped as the cluster label on github_api_* counters" default:"nuke"`
+
 	WebhookSecret      string `required:"false" arg:"webhook-secret"       env:"WEBHOOK_SECRET"       usage:"GitHub webhook secret for HMAC verification of /webhook/github-build"                         display:"length"`
 	WebhookMinInterval string `required:"false" arg:"webhook-min-interval" env:"WEBHOOK_MIN_INTERVAL" usage:"Min interval between webhook-triggered build-checks per repo (collapses workflow_run storms)"                  default:"1m"`
 
@@ -122,7 +125,11 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	ghClient := pkg.NewGitHubClient(httpClient)
+	ghClient := pkg.NewGitHubClient(httpClient, pkg.NewGitHubAPIRecorder(pkg.GitHubAPILabels{
+		Service:    "github-build-watcher",
+		Credential: strconv.FormatInt(a.AppID, 10),
+		Cluster:    a.Cluster,
+	}))
 
 	resolved, refreshTask, err := factory.CreateAllowlistSnapshot(ghClient, repoAllowlist)
 	if err != nil {
