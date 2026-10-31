@@ -112,6 +112,7 @@ func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHub
 	httpClient.Transport = &rateCapturingTransport{
 		inner:    inner,
 		set:      c.setRateRemaining,
+		log:      logNon2xxV2,
 		recorder: recorder,
 	}
 	c.client = gogithub.NewClient(httpClient)
@@ -145,11 +146,18 @@ func (c *githubClient) RateLimitRemaining() int {
 // defensively. Same transport as github-pr-watcher (the fix there: scoping to
 // core so a search response can't overwrite the gauge with a low number).
 //
-// The same capture point counts every round trip via recorder, transport
-// errors included. A nil recorder disables counting.
+// The same capture point logs one line per non-2xx response (status, rate-limit
+// bucket, remaining, Retry-After, body snippet) via log — the only record of
+// whether a 429/403 is primary-quota exhaustion or secondary rate limiting.
+// go-github does not log at its HTTP boundary, so without this line that
+// evidence is lost. A nil log disables it.
+//
+// It also counts every round trip via recorder, transport errors included.
+// A nil recorder disables counting.
 type rateCapturingTransport struct {
 	inner    http.RoundTripper
 	set      func(int)
+	log      func(string)
 	recorder GitHubAPIRecorder
 }
 
@@ -162,6 +170,9 @@ func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, e
 		return resp, err
 	}
 	t.captureRemaining(resp)
+	if t.log != nil {
+		logNon2xxResponse(req, resp, t.log)
+	}
 	return resp, err
 }
 
