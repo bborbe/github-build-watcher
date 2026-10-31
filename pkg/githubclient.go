@@ -111,6 +111,7 @@ func NewGitHubClient(httpClient *http.Client) GitHubClient {
 	httpClient.Transport = &rateCapturingTransport{
 		inner: inner,
 		set:   c.setRateRemaining,
+		log:   logNon2xxV2,
 	}
 	c.client = gogithub.NewClient(httpClient)
 	return c
@@ -142,9 +143,16 @@ func (c *githubClient) RateLimitRemaining() int {
 // captured; responses without the header (non-GitHub or legacy) are captured
 // defensively. Same transport as github-pr-watcher (the fix there: scoping to
 // core so a search response can't overwrite the gauge with a low number).
+//
+// The same capture point logs one line per non-2xx response (status, rate-limit
+// bucket, remaining, Retry-After, body snippet) via log — the only record of
+// whether a 429/403 is primary-quota exhaustion or secondary rate limiting.
+// go-github does not log at its HTTP boundary, so without this line that
+// evidence is lost. A nil log disables it.
 type rateCapturingTransport struct {
 	inner http.RoundTripper
 	set   func(int)
+	log   func(string)
 }
 
 func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -153,6 +161,9 @@ func (t *rateCapturingTransport) RoundTrip(req *http.Request) (*http.Response, e
 		return resp, err
 	}
 	t.captureRemaining(resp)
+	if t.log != nil {
+		logNon2xxResponse(req, resp, t.log)
+	}
 	return resp, err
 }
 
