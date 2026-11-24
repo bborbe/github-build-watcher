@@ -39,7 +39,11 @@ func Resolve(ctx context.Context, cfg Config) (*http.Client, error) {
 			cfg.LogPrefix,
 		)
 	}
-	appCfg := githubapp.Config{AppID: cfg.AppID, InstallationID: cfg.InstallationID}
+	appCfg := githubapp.Config{
+		AppID:          cfg.AppID,
+		InstallationID: cfg.InstallationID,
+		BaseURL:        os.Getenv("GITHUB_API_BASE_URL"),
+	}
 	if hasPEMFile {
 		pemBytes, err := os.ReadFile(cfg.PEMKeyFile)
 		if err != nil {

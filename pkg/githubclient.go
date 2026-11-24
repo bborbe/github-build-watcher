@@ -14,8 +14,15 @@ import (
 	"time"
 
 	"github.com/bborbe/errors"
+	libhttp "github.com/bborbe/http"
 	gogithub "github.com/google/go-github/v62/github"
 )
+
+// githubAPIInflightBound caps the concurrent GitHub API requests this watcher
+// issues. GitHub's secondary rate limit is a concurrency heuristic, so a retry
+// that fires more requests in parallel makes it worse; four keeps the poll
+// fan-out under the heuristic while leaving room to make progress.
+const githubAPIInflightBound = 4
 
 // ErrRateLimited is returned when the GitHub API responds with a rate-limit or
 // abuse-rate-limit error.
@@ -109,12 +116,23 @@ func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHub
 	if inner == nil {
 		inner = http.DefaultTransport
 	}
-	httpClient.Transport = &rateCapturingTransport{
-		inner:    inner,
-		set:      c.setRateRemaining,
-		log:      logNon2xxV2,
-		recorder: recorder,
-	}
+	// Chain, outermost first: retry → capture → limit → network. The retry sits
+	// outside the capture so every attempt is counted and logged; the limiter is
+	// innermost so it bounds actual requests, and a retry re-acquires a slot
+	// rather than holding one across the wait.
+	httpClient.Transport = libhttp.NewRoundTripperRetryWithBackoff(
+		&rateCapturingTransport{
+			inner: libhttp.NewRoundTripperLimitConcurrency(
+				inner,
+				githubAPIInflightBound,
+				nil,
+			),
+			set:      c.setRateRemaining,
+			log:      logNon2xxV2,
+			recorder: recorder,
+		},
+		libhttp.RetryBackoffOptions{},
+	)
 	c.client = gogithub.NewClient(httpClient)
 	return c
 }
