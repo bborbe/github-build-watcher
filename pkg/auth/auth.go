@@ -22,6 +22,7 @@ type Config struct {
 	InstallationID int64
 	PEMKeyFile     string
 	PEMKey         string
+	BaseURL        string // GitHub API base URL override; empty means https://api.github.com
 	LogPrefix      string // e.g. "watcher/github-build" or "watcher/github-build-run-once"
 }
 
@@ -39,7 +40,11 @@ func Resolve(ctx context.Context, cfg Config) (*http.Client, error) {
 			cfg.LogPrefix,
 		)
 	}
-	appCfg := githubapp.Config{AppID: cfg.AppID, InstallationID: cfg.InstallationID}
+	appCfg := githubapp.Config{
+		AppID:          cfg.AppID,
+		InstallationID: cfg.InstallationID,
+		BaseURL:        cfg.BaseURL,
+	}
 	if hasPEMFile {
 		pemBytes, err := os.ReadFile(cfg.PEMKeyFile)
 		if err != nil {

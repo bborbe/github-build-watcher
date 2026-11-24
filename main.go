@@ -51,15 +51,16 @@ type application struct {
 	SentryDSN   string `required:"false" arg:"sentry-dsn"   env:"SENTRY_DSN"   usage:"SentryDSN"    display:"length"`
 	SentryProxy string `required:"false" arg:"sentry-proxy" env:"SENTRY_PROXY" usage:"Sentry Proxy"`
 
-	Listen         string           `required:"false" arg:"listen"          env:"LISTEN"          usage:"HTTP listen address (healthz/readiness/metrics/trigger)"                               default:":9090"`
-	AppID          int64            `required:"false" arg:"app-id"          env:"APP_ID"          usage:"GitHub App ID (numeric); required for App auth"`
-	InstallationID int64            `required:"false" arg:"installation-id" env:"INSTALLATION_ID" usage:"GitHub App Installation ID (numeric)"`
-	PEMKeyFile     string           `required:"false" arg:"pem-key-file"    env:"PEM_KEY_FILE"    usage:"Path to the GitHub App private key (PEM) mounted from k8s Secret"`
-	PEMKey         string           `required:"false" arg:"pem-key"         env:"PEM_KEY"         usage:"GitHub App private key (PEM) as env var content; mutually exclusive with PEM_KEY_FILE"                 display:"length"`
-	KafkaBrokers   libkafka.Brokers `required:"true"  arg:"kafka-brokers"   env:"KAFKA_BROKERS"   usage:"Comma-separated Kafka broker list"`
-	Stage          string           `required:"true"  arg:"stage"           env:"STAGE"           usage:"Deployment stage (dev|prod)"`
-	PollInterval   string           `required:"false" arg:"poll-interval"   env:"POLL_INTERVAL"   usage:"Poll interval (Go duration)"                                                           default:"5m"`
-	RepoAllowlist  string           `required:"true"  arg:"repo-allowlist"  env:"REPO_ALLOWLIST"  usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); MUST be non-empty"`
+	Listen         string           `required:"false" arg:"listen"          env:"LISTEN"              usage:"HTTP listen address (healthz/readiness/metrics/trigger)"                                            default:":9090"`
+	AppID          int64            `required:"false" arg:"app-id"          env:"APP_ID"              usage:"GitHub App ID (numeric); required for App auth"`
+	InstallationID int64            `required:"false" arg:"installation-id" env:"INSTALLATION_ID"     usage:"GitHub App Installation ID (numeric)"`
+	PEMKeyFile     string           `required:"false" arg:"pem-key-file"    env:"PEM_KEY_FILE"        usage:"Path to the GitHub App private key (PEM) mounted from k8s Secret"`
+	PEMKey         string           `required:"false" arg:"pem-key"         env:"PEM_KEY"             usage:"GitHub App private key (PEM) as env var content; mutually exclusive with PEM_KEY_FILE"                              display:"length"`
+	APIBaseURL     string           `required:"false" arg:"api-base-url"    env:"GITHUB_API_BASE_URL" usage:"GitHub API base URL override (empty = https://api.github.com); used to point the watcher at a stub"`
+	KafkaBrokers   libkafka.Brokers `required:"true"  arg:"kafka-brokers"   env:"KAFKA_BROKERS"       usage:"Comma-separated Kafka broker list"`
+	Stage          string           `required:"true"  arg:"stage"           env:"STAGE"               usage:"Deployment stage (dev|prod)"`
+	PollInterval   string           `required:"false" arg:"poll-interval"   env:"POLL_INTERVAL"       usage:"Poll interval (Go duration)"                                                                        default:"5m"`
+	RepoAllowlist  string           `required:"true"  arg:"repo-allowlist"  env:"REPO_ALLOWLIST"      usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); MUST be non-empty"`
 
 	BuildAssignee   string `required:"true"  arg:"build-assignee"    env:"TASK_ASSIGNEE" usage:"Frontmatter assignee for published tasks"                                                                                                                                                                             default:"build-fixer-agent"`
 	BuildTaskStatus string `required:"true"  arg:"build-task-status" env:"TASK_STATUS"   usage:"Frontmatter status for published tasks"                                                                                                                                                                               default:"next"`
@@ -118,6 +119,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		InstallationID: a.InstallationID,
 		PEMKeyFile:     a.PEMKeyFile,
 		PEMKey:         a.PEMKey,
+		BaseURL:        a.APIBaseURL,
 		LogPrefix:      "watcher/github-build",
 	})
 	if err != nil {
@@ -129,7 +131,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		Service:    "github-build-watcher",
 		Credential: strconv.FormatInt(a.AppID, 10),
 		Cluster:    a.Cluster,
-	}))
+	}), a.APIBaseURL)
 
 	resolved, refreshTask, err := factory.CreateAllowlistSnapshot(ghClient, repoAllowlist)
 	if err != nil {
