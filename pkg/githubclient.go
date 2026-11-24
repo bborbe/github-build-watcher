@@ -9,12 +9,15 @@ import (
 	stderrors "errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/bborbe/errors"
 	libhttp "github.com/bborbe/http"
+	"github.com/golang/glog"
 	gogithub "github.com/google/go-github/v62/github"
 )
 
@@ -110,7 +113,11 @@ type GitHubClient interface {
 // every response, so RateLimitRemaining() reflects the shared App token's
 // live quota. Every round trip is also counted by recorder (per-caller
 // github_api_calls_total / github_api_rate_limited_total).
-func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHubClient {
+func NewGitHubClient(
+	httpClient *http.Client,
+	recorder GitHubAPIRecorder,
+	apiBaseURL string,
+) GitHubClient {
 	c := &githubClient{}
 	inner := httpClient.Transport
 	if inner == nil {
@@ -134,7 +141,26 @@ func NewGitHubClient(httpClient *http.Client, recorder GitHubAPIRecorder) GitHub
 		libhttp.RetryBackoffOptions{},
 	)
 	c.client = gogithub.NewClient(httpClient)
+	applyAPIBaseURL(c.client, apiBaseURL)
 	return c
+}
+
+// applyAPIBaseURL points the go-github client at an override base URL. An empty
+// value keeps https://api.github.com. The path gets a trailing slash because
+// go-github resolves request paths against it as a directory.
+func applyAPIBaseURL(client *gogithub.Client, apiBaseURL string) {
+	if apiBaseURL == "" {
+		return
+	}
+	u, err := url.Parse(apiBaseURL)
+	if err != nil {
+		glog.Warningf("invalid GITHUB_API_BASE_URL %q, keeping the default: %v", apiBaseURL, err)
+		return
+	}
+	if !strings.HasSuffix(u.Path, "/") {
+		u.Path += "/"
+	}
+	client.BaseURL = u
 }
 
 type githubClient struct {
